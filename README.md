@@ -1,65 +1,64 @@
-# Santa 2020 — Multi-Armed Bandit Optimization
+# Santa 2020 — Kaggle Competition
 
-Building agents that play a competitive multi-armed bandit game against other teams' agents. This was a [Kaggle simulation competition](https://www.kaggle.com/competitions/santa-2020) from the annual Santa series in 2020. Notebooks developed on [Kaggle](https://www.kaggle.com/illidan7).
+## Overview
+
+The [Santa 2020](https://www.kaggle.com/competitions/santa-2020) competition was a multi-armed bandit (MAB) simulation game where two agents competed head-to-head across 100 slot machines over 2,000 rounds. Each machine had a hidden payout probability that decayed with total usage by both players. The challenge was to build an agent that maximized cumulative reward while adapting to opponent behavior and machine decay dynamics — a classic explore-vs-exploit problem with an adversarial twist.
+
+**Result: Peak Rating ~1,300+ (Elo-based leaderboard)**
+
+Kaggle profile: [illidan7](https://www.kaggle.com/illidan7)
 
 ## Approach
 
-### 1. Competitive Analysis
+### 1. Competitive Intelligence
 
-Scraped and analyzed the top 100 teams' win rates and head-to-head matchup matrices. Identified dominant strategies and exploitable patterns among leading agents, informing the design of counter-strategies.
+Scraped Meta Kaggle data and leaderboard statistics to analyze the top 100 teams. Built win-rate heatmaps across the top 25 teams, rating-vs-submission-date trajectories, and identified the highest-rated individual agent submissions. This informed which strategies were dominant and which teams to study.
 
-### 2. Heuristic Agent
+### 2. Heuristic Baseline (Random Sticky Agent)
 
-Built a baseline agent with a random-sticky strategy (commit to a bandit once it pays out) combined with adaptive blacklisting (abandon bandits with sustained low payouts). Established a performance floor and validated the competition environment.
+Built a hand-crafted agent combining exploration with exploitation. The agent tracked per-machine pull counts and success rates, maintained blacklists (machines with too many blanks) and yellowlists (low-performing machines), and used a "stickiness" mechanic — once a machine paid out, the agent stayed on it for several consecutive pulls. Strategy shifted from exploration-heavy in early rounds to pure exploitation after round 1,500.
 
-### 3. Episode Scraper
+### 3. Episode Data Pipeline
 
-Automated scraper to download 1000+ game replays from the top 15 teams via the Kaggle API. Collected the raw episode data needed to train supervised models on expert gameplay decisions.
+Built a two-stage data pipeline to learn from top competitors. First, an automated scraper collected 1,200+ episode replays from the top 15 leaderboard teams via the Kaggle Episode API. Then, parser scripts converted raw episode JSON into structured tabular data: per-step features (round number, pull counts, success counts, opponent pulls) paired with payout outcomes.
 
-### 4. Episode Parser
+### 4. ML Agent v1 (Decision Tree + XGBoost)
 
-Python script to parse raw episode JSON into structured training data: per-step features (bandit payouts, action history, game phase) with labels (chosen action by top agents). Converts replay logs into tabular format suitable for tree-based models.
+Trained the first ML-based agent on the scraped episode data. A Decision Tree regressor predicted expected payout per machine given game state features. At each step, the agent selected the machine with maximum predicted payout (with a fudge factor for tie-breaking). Ran champion-vs-challenger simulations to compare Decision Tree against XGBoost variants locally before submitting.
 
-### 5. Decision Tree Agent
+### 5. ML Agent v2 (Phase-Specific Models)
 
-Trained DecisionTree and XGBoost classifiers to predict which bandit a top agent would select given the current game state. The agent selects the bandit with maximum predicted payout, with controlled epsilon-greedy exploration.
+The key insight: optimal strategy shifts dramatically across the 2,000-round game. Trained four separate Decision Tree models for different game phases (rounds 0-500, 500-1000, 1000-1500, 1500-2000). Early phases favor exploration while late phases favor exploitation of learned payout distributions. The agent dynamically swapped models at phase boundaries.
 
-### 6. Phase-Split Training
+### 6. Final Agent (Top Agent Data + Refined Pipeline)
 
-Splits the 2000-step game into 4 phases (exploration, early exploitation, mid-game, endgame) and trains separate models for each. Each phase has distinct optimal strategies — early phases favor exploration while late phases favor exploitation of learned payout distributions.
-
-### 7. Final Model
-
-Production agent combining phase-split XGBoost predictions with fallback heuristics. Selects maximum predicted payout per phase, with adaptive exploration rates that decay as the game progresses.
+Scaled training data by scraping episodes from the highest-rated individual agents (beyond just top 15 LB teams). Experimented with feature engineering (game progress ratio, total pulls, success ratios), hyperparameter tuning across multiple model families, and champion-vs-challenger evaluation. The final submission agent used a greedy strategy backed by a trained regressor, updating predictions in real-time as both players' actions were observed.
 
 ## Repository Structure
 
 ```
-santa-2020/
-├── README.md
-├── .gitignore
-└── notebooks/
-    ├── 01-competitive-analysis.ipynb               # Top-100 win rates and matchup analysis
-    ├── 02-heuristic-agent.ipynb                    # Random-sticky + adaptive blacklisting
-    ├── 03-episode-scraper.ipynb                    # Automated replay downloader (top 15 teams)
-    ├── 04-episode-parser.py                        # Episode JSON → tabular training data
-    ├── 05-decision-tree-agent.ipynb                # DecisionTree/XGBoost bandit predictor
-    ├── 06-phase-split-training.ipynb               # 4-phase separate model training
-    └── 07-final-model.ipynb                        # Production agent with phase-split XGBoost
+├── notebooks/
+│   ├── 01-competitive-analysis.ipynb     # Top-100 win-rate heatmaps + rating distributions
+│   ├── 02-heuristic-agent.ipynb          # Random-sticky agent with blacklist/yellowlist
+│   ├── 03-episode-scraper.ipynb          # Scrapes 1,200+ replays from top 15 LB teams
+│   ├── 04-episode-parser.py              # Episode JSON -> tabular training data
+│   ├── 05-decision-tree-agent.ipynb      # Decision Tree + XGBoost agent with simulations
+│   ├── 06-phase-split-training.ipynb     # 4-phase game-specific model training
+│   └── 07-final-model.ipynb             # Final agent: top-agent data + refined pipeline
+└── README.md
 ```
 
 ## Tech Stack
 
-- **ML**: XGBoost, scikit-learn (DecisionTree)
-- **Data**: pandas, NumPy
-- **Scraping**: Kaggle API, requests
-- **Environment**: kaggle-environments (multi-armed bandit simulator)
+- **Models**: scikit-learn (DecisionTreeRegressor), XGBoost, LightGBM, Random Forest
+- **Data Collection**: Kaggle Episode API, Meta Kaggle datasets, requests
+- **Analysis**: pandas, NumPy, Matplotlib (heatmaps, rating trajectories, reward curves)
+- **Simulation**: kaggle-environments (local agent-vs-agent testing)
+- **Infrastructure**: Kaggle Notebooks (CPU)
 
 ## Competition
 
-| | |
-|---|---|
-| **Competition** | [Santa 2020 — The Candy Cane Contest](https://www.kaggle.com/competitions/santa-2020) |
-| **Type** | Simulation (multi-armed bandit) |
-| **Metric** | Leaderboard rank (agent vs. agent matchups) |
-| **Timeline** | December 2020 -- January 2021 |
+- **Name**: [Santa 2020 — The Candy Cane Contest](https://www.kaggle.com/competitions/santa-2020)
+- **Type**: Multi-agent simulation (Multi-Armed Bandit)
+- **Metric**: Elo-based rating from head-to-head matches
+- **Timeline**: December 2020 — January 2021
