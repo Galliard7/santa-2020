@@ -1,5 +1,7 @@
 # Santa 2020 — Kaggle Competition
 
+![Competition Header](assets/header.png)
+
 ## Overview
 
 The [Santa 2020](https://www.kaggle.com/competitions/santa-2020) competition was a multi-armed bandit (MAB) simulation game where two agents competed head-to-head across 100 slot machines over 2,000 rounds. Each machine had a hidden payout probability that decayed with total usage by both players. The challenge was to build an agent that maximized cumulative reward while adapting to opponent behavior and machine decay dynamics — a classic explore-vs-exploit problem with an adversarial twist.
@@ -33,6 +35,32 @@ The key insight: optimal strategy shifts dramatically across the 2,000-round gam
 ### 6. Final Agent (Top Agent Data + Refined Pipeline)
 
 Scaled training data by scraping episodes from the highest-rated individual agents (beyond just top 15 LB teams). Experimented with feature engineering (game progress ratio, total pulls, success ratios), hyperparameter tuning across multiple model families, and champion-vs-challenger evaluation. The final submission agent used a greedy strategy backed by a trained regressor, updating predictions in real-time as both players' actions were observed.
+
+## Results
+
+| Agent | Elo Rating | Notes |
+|---|---|---|
+| Random Sticky (heuristic) | — | Blacklist/yellowlist mechanics |
+| Decision Tree + XGBoost v1 | — | Trained on 1,200+ scraped episodes |
+| Phase-Split Models (v2) | — | 4 separate models per game phase |
+| **Final Agent** | **~1,300+** | Top-agent data + real-time updates |
+
+## Architecture
+
+```mermaid
+graph LR
+    A["Kaggle Episode API<br>1,200+ replays"] --> B["Episode Parser<br>JSON to tabular"]
+    B --> C["Phase-Split Training"]
+    C --> C1["Phase 1 Model<br>(rounds 0-500)"]
+    C --> C2["Phase 2 Model<br>(rounds 500-1000)"]
+    C --> C3["Phase 3 Model<br>(rounds 1000-1500)"]
+    C --> C4["Phase 4 Model<br>(rounds 1500-2000)"]
+    C1 --> D["Live Agent<br>phase-aware model swap"]
+    C2 --> D
+    C3 --> D
+    C4 --> D
+    D --> E["Greedy Selection<br>max predicted payout"]
+```
 
 ## Repository Structure
 
